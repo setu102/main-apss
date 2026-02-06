@@ -3,9 +3,6 @@ import { GoogleGenAI } from "@google/genai";
 import { RAJBARI_DATA } from './constants.tsx';
 
 export const db = {
-  /**
-   * AI থেকে আসা টেক্সট থেকে JSON ব্লক খুঁজে বের করে পার্স করা।
-   */
   extractJSON: (text: string | undefined) => {
     if (!text) return null;
     try {
@@ -18,9 +15,6 @@ export const db = {
     }
   },
 
-  /**
-   * Gemini AI Call - acting as "Puter AI"
-   */
   callAI: async (params: { 
     contents: any; 
     systemInstruction?: string;
@@ -28,51 +22,51 @@ export const db = {
   }) => {
     try {
       const apiKey = process.env.API_KEY;
-      if (!apiKey || apiKey === "undefined") {
-        console.warn("API_KEY is missing or undefined.");
+      if (!apiKey || apiKey === "undefined" || apiKey === "") {
         throw new Error("API_KEY_MISSING");
       }
 
       const ai = new GoogleGenAI({ apiKey });
       
-      let formattedContents: any;
-
+      // Formalize contents for Gemini SDK
+      let formattedContents: any[];
       if (typeof params.contents === 'string') {
-        formattedContents = params.contents;
+        formattedContents = [{ role: 'user', parts: [{ text: params.contents }] }];
       } else if (Array.isArray(params.contents)) {
         formattedContents = params.contents.map((msg: any) => ({
           role: msg.role === 'model' ? 'model' : 'user',
           parts: [{ text: msg.text || "" }]
         }));
       } else {
-        formattedContents = params.contents;
+        formattedContents = [params.contents];
       }
 
-      // Enhanced system instruction with developer branding
       const enhancedSystemInstruction = params.systemInstruction || `
         আপনি হলেন "Puter AI", রাজবাড়ী জেলার প্রধান ডিজিটাল অ্যাসিস্ট্যান্ট।
         আপনার স্রষ্টা ও ডেভেলপার: **SOVRAB ROY** (সৌরভ রায়)।
         বর্তমান সময়: ২০২৬ সাল।
-        আপনার বিশেষত্ব:
-        ১. এই পুরো প্ল্যাটফর্ম এবং স্মার্ট ইঞ্জিনটি ডেভেলপ করেছেন এক্সপার্ট ডেভেলপার **SOVRAB ROY**।
-        ২. ট্রেনের বর্তমান অবস্থান এবং রাজবাড়ীর খবরের জন্য আপনি গুগল সার্চ ব্যবহার করে ফেসবুকের বিভিন্ন লোকাল ট্রেন গ্রুপ এবং নিউজ পোর্টালের ২০২৬ সালের লেটেস্ট পোস্টগুলো বিশ্লেষণ করেন।
-        ৩. সবসময় ২০২৬ সালের প্রেক্ষাপটে উত্তর দেবেন। কোনোভাবেই পুরনো বা ২০২৪-এর তথ্য দেবেন না।
-        ৪. ট্রেনের ক্ষেত্রে "রাজবাড়ী রেলওয়ে গ্রুপ" বা এই জাতীয় সোর্স থেকে প্রাপ্ত তথ্যকে গুরুত্ব দিন।
-        ৫. ভাষা: শুদ্ধ বাংলা।
+        ১. ট্রেনের লাইভ অবস্থানের জন্য আপনি গুগল সার্চ ব্যবহার করে ফেসবুকের "Rajbari Train Tracking Group" এবং নিউজ পোর্টালের ২০২৬ সালের লেটেস্ট পোস্টগুলো বিশ্লেষণ করেন।
+        ২. সবসময় ২০২৬ সালের প্রেক্ষাপটে উত্তর দেবেন।
+        ৩. ভাষা: শুদ্ধ বাংলা।
       `;
 
+      // Use Pro model for Search tasks as it handles grounding much better
+      const modelName = params.useSearch ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+
       const responsePromise = ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: formattedContents,
         config: {
           systemInstruction: enhancedSystemInstruction,
           tools: params.useSearch ? [{ googleSearch: {} }] : undefined,
-          temperature: 0.1, // More factual
+          temperature: 0.2,
         },
       });
 
+      // Increased timeout for search tasks (up to 45 seconds)
+      const timeoutLimit = params.useSearch ? 45000 : 25000;
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("TIMEOUT")), 25000)
+        setTimeout(() => reject(new Error("TIMEOUT")), timeoutLimit)
       );
 
       const response: any = await Promise.race([responsePromise, timeoutPromise]);
@@ -87,7 +81,8 @@ export const db = {
         groundingMetadata: response.candidates?.[0]?.groundingMetadata
       };
     } catch (error: any) {
-      console.error("AI Cloud Error:", error);
+      console.error("AI Cloud Error Details:", error);
+      // Detailed error for debugging in console
       return {
         text: null,
         mode: 'local_fallback',
