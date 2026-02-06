@@ -1,5 +1,4 @@
 
-import { GoogleGenAI } from "@google/genai";
 import { RAJBARI_DATA } from './constants.tsx';
 
 export const db = {
@@ -19,73 +18,64 @@ export const db = {
     contents: any; 
     systemInstruction?: string;
     useSearch?: boolean;
+    category?: string;
   }) => {
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey || apiKey === "undefined" || apiKey === "") {
-        throw new Error("API_KEY_MISSING");
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
+      // Vercel-এ হোস্ট করার পর ব্রাউজারে এপিআই কী কাজ করে না। 
+      // তাই আমরা আমাদের তৈরি করা /api/ai এন্ডপয়েন্টটি কল করবো।
       
-      // Formalize contents for Gemini SDK
-      let formattedContents: any[];
-      if (typeof params.contents === 'string') {
-        formattedContents = [{ role: 'user', parts: [{ text: params.contents }] }];
-      } else if (Array.isArray(params.contents)) {
-        formattedContents = params.contents.map((msg: any) => ({
-          role: msg.role === 'model' ? 'model' : 'user',
-          parts: [{ text: msg.text || "" }]
-        }));
-      } else {
-        formattedContents = [params.contents];
-      }
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', hour12: true });
+      const dateStr = now.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
 
-      const enhancedSystemInstruction = params.systemInstruction || `
-        আপনি হলেন "Puter AI", রাজবাড়ী জেলার প্রধান ডিজিটাল অ্যাসিস্ট্যান্ট।
-        আপনার স্রষ্টা ও ডেভেলপার: **SOVRAB ROY** (সৌরভ রায়)।
-        বর্তমান সময়: ২০২৬ সাল।
-        ১. ট্রেনের লাইভ অবস্থানের জন্য আপনি গুগল সার্চ ব্যবহার করে ফেসবুকের "Rajbari Train Tracking Group" এবং নিউজ পোর্টালের ২০২৬ সালের লেটেস্ট পোস্টগুলো বিশ্লেষণ করেন।
-        ২. সবসময় ২০২৬ সালের প্রেক্ষাপটে উত্তর দেবেন।
-        ৩. ভাষা: শুদ্ধ বাংলা।
+      const baseInstruction = `
+        আজ ${dateStr}, এখন সময় ${timeStr}।
+        লোকেশন: রাজবাড়ী জেলা, বাংলাদেশ।
+        আপনি একটি জেলা-ভিত্তিক তথ্য সহকারী (District Smart Assistant)।
+        আপনার কাজ হলো রাজবাড়ী লাইভ সার্ভারের হয়ে নির্ভুল ও দায়িত্বশীলভাবে তথ্য দেওয়া।
+        
+        ১) ট্রেন লাইভ ট্র্যাকিং: যদি নিশ্চিত লাইভ তথ্য না পাওয়া যায়, তবে "সম্ভাবনা" বা "সময়ের উপর ভিত্তি করে" শব্দ ব্যবহার করবেন। অফিসিয়াল দাবি করবেন না।
+        ২) বাজারদর: category = market_price হলে শুধু JSON দেবেন।
+        ৩) জরুরি নোটিশ: category = notices হলে শুধু JSON দেবেন।
+        ৪) চাকরি বিজ্ঞপ্তি: category = jobs হলে শুধু JSON দেবেন।
+        ৫) ভাষা সবসময় সহজ ও বাংলা হবে।
+        ${params.systemInstruction || ""}
       `;
 
-      // Use Pro model for Search tasks as it handles grounding much better
-      const modelName = params.useSearch ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
-
-      const responsePromise = ai.models.generateContent({
-        model: modelName,
-        contents: formattedContents,
-        config: {
-          systemInstruction: enhancedSystemInstruction,
-          tools: params.useSearch ? [{ googleSearch: {} }] : undefined,
-          temperature: 0.2,
-        },
+      // API Bridge Call
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: typeof params.contents === 'string' 
+            ? [{ role: 'user', parts: [{ text: params.contents }] }] 
+            : params.contents,
+          systemInstruction: baseInstruction,
+          tools: params.useSearch ? [{ googleSearch: {} }] : undefined
+        })
       });
 
-      // Increased timeout for search tasks (up to 45 seconds)
-      const timeoutLimit = params.useSearch ? 45000 : 25000;
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("TIMEOUT")), timeoutLimit)
-      );
-
-      const response: any = await Promise.race([responsePromise, timeoutPromise]);
-
-      if (!response || !response.text) {
-        throw new Error("EMPTY_RESPONSE");
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.details || "API_BRIDGE_FAILED");
       }
 
+      const data = await response.json();
+
       return {
-        text: response.text,
-        mode: params.useSearch ? 'gemini_cloud_live' : 'puter_cloud_ai',
-        groundingMetadata: response.candidates?.[0]?.groundingMetadata
+        text: data.text,
+        mode: 'live_server_v2', // Rebranded
+        sources: data.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
+          title: chunk.web?.title || "সূত্র",
+          uri: chunk.web?.uri || "#"
+        })).filter((s: any) => s.uri !== "#") || []
       };
+
     } catch (error: any) {
-      console.error("AI Cloud Error Details:", error);
-      // Detailed error for debugging in console
+      console.error("Engine Bridge Error:", error.message);
       return {
         text: null,
-        mode: 'local_fallback',
+        mode: 'offline_fallback',
         error: error.message
       };
     }
