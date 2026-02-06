@@ -9,32 +9,21 @@ import {
   Sparkles,
   Info,
   RefreshCcw,
-  AlertCircle,
-  Clock,
-  Globe,
-  Activity,
   Zap,
-  MessageCircle,
-  Navigation2,
-  Cpu,
+  Globe,
   Facebook,
   ShoppingBasket,
   Megaphone,
   Briefcase,
   TrendingUp,
   TrendingDown,
-  Calendar,
-  Building2,
-  UserRoundSearch,
-  Landmark,
-  School,
-  Crown,
-  Link as LinkIcon,
-  ChevronRight,
+  Clock,
   ExternalLink,
-  History
+  History,
+  ChevronRight,
+  Link as LinkIcon
 } from 'lucide-react';
-import { Category, Train, AIInference } from '../types.ts';
+import { Category, Train } from '../types.ts';
 import { db } from '../db.ts';
 
 interface CategoryViewProps {
@@ -59,7 +48,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [dataSource, setDataSource] = useState<'live' | 'puter' | 'cache'>('puter');
+  const [dataSource, setDataSource] = useState<'live' | 'local' | 'cache'>('local');
   const [selectedTrain, setSelectedTrain] = useState<Train | null>(null);
   const [isInferring, setIsInferring] = useState(false);
   const [currentStation, setCurrentStation] = useState<string | null>(null);
@@ -71,7 +60,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
 
   const getLiveTimeContext = () => {
     const now = new Date();
-    return `আজ ${now.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}, এখন সময় ${now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+    return `আজ ${now.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}, সময় ${now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
   };
 
   const fetchData = async (forceRefresh = false) => {
@@ -81,7 +70,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     try {
       const localItems = await db.getCategory(category);
       setData(localItems);
-      setDataSource('puter');
+      setDataSource('local');
       
       if (['market_price', 'notices', 'jobs'].includes(category)) {
         if (category === 'jobs' && !forceRefresh) {
@@ -111,11 +100,11 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     let prompt = "";
 
     if (cat === 'market_price') {
-      prompt = `${timeContext}। রাজবাড়ীর বড় বাজার ও মুরগির ফার্ম বাজারের আজকের লাইভ বাজারদর দিন।`;
+      prompt = `${timeContext}। রাজবাড়ীর আজকের লাইভ বাজারদর দিন। ফরম্যাট: [{name, unit, priceRange, trend: 'up'|'down'|'stable'}]`;
     } else if (cat === 'notices') {
-      prompt = `${timeContext}। রাজবাড়ী জেলা প্রশাসনের সর্বশেষ জরুরি নোটিশগুলো দিন।`;
+      prompt = `${timeContext}। রাজবাড়ী জেলা প্রশাসনের সর্বশেষ ৫টি জরুরি নোটিশ ও সারাংশ দিন। ফরম্যাট: [{title, date, summary, priority: 'high'|'normal'}]`;
     } else if (cat === 'jobs') {
-      prompt = `${timeContext}। রাজবাড়ী জেলার আজকের লেটেস্ট চাকরির বিজ্ঞপ্তি দিন।`;
+      prompt = `${timeContext}। রাজবাড়ী জেলার আজকের লেটেস্ট চাকরির বিজ্ঞপ্তি দিন। ফরম্যাট: [{title, org, deadline, link, type: 'Govt'|'Private'}]`;
     }
 
     try {
@@ -125,7 +114,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
         useSearch: true
       });
 
-      if (response.mode === 'local_fallback' || !response.text) throw new Error("AI_FAIL");
+      if (response.mode === 'local_engine' || !response.text) throw new Error("FAIL");
 
       const aiParsed = db.extractJSON(response.text);
       if (aiParsed && Array.isArray(aiParsed)) {
@@ -138,7 +127,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
       }
     } catch (e) {
       setData(fallbackData);
-      setDataSource('puter');
+      setDataSource('local');
     } finally {
       setIsAiLoading(false);
     }
@@ -167,35 +156,48 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     setCurrentStation(null);
     setSources([]);
     const timeContext = getLiveTimeContext();
-    setAiInference({ reason: 'স্মার্ট ইঞ্জিনের মাধ্যমে রিয়েল-টাইম তথ্য খোঁজা হচ্ছে...', delay: 'হিসাব হচ্ছে...' });
+    setAiInference({ reason: 'স্মার্ট ইঞ্জিন ক্লাউড থেকে তথ্য সংগ্রহ করছে...', delay: 'হিসাব হচ্ছে...' });
     
     try {
-      const prompt = `${timeContext}। ${train.name} ট্রেনটির (রুট: ${train.route}) বর্তমান অবস্থান কোথায় এবং কত মিনিট দেরি আছে? ফেসবুক ও রাজবাড়ী রেলওয়ে নিউজ পোর্টাল চেক করুন। রুট ম্যাপ: ${train.detailedRoute}`;
+      const prompt = `${timeContext}। ${train.name} ট্রেনটির (রুট: ${train.route}) বর্তমান লাইভ অবস্থান কোথায়? রাজবাড়ী রেলওয়ে নিউজ পোর্টাল চেক করুন।`;
       const response = await db.callAI({ contents: prompt, useSearch: true });
-      if (response.mode === 'local_fallback' || !response.text) throw new Error("FAIL");
+      
+      if (response.mode === 'local_engine' || !response.text) throw new Error("FAIL");
+      
       setAiInference({ reason: response.text, delay: 'লাইভ ডাটা অনুযায়ী' });
       setSources(response.sources || []);
       const found = findStationInText(response.text, train.detailedRoute);
       if (found) setCurrentStation(found);
     } catch (error) {
-      // Improved Fallback Inference based on schedule time vs current time
+      // Improved Fallback Estimation
       const now = new Date();
       const currentHour = now.getHours();
       const currentMin = now.getMinutes();
+      const totalMinutes = currentHour * 60 + currentMin;
+
+      // Extract departure time (e.g., "06:10 AM")
+      const depTimeStr = train.departure;
+      const isPM = depTimeStr.includes('PM');
+      const timeParts = depTimeStr.replace(' AM', '').replace(' PM', '').split(':');
+      let depHour = parseInt(timeParts[0]);
+      if (isPM && depHour < 12) depHour += 12;
+      const depMinutes = depHour * 60 + parseInt(timeParts[1]);
+
       const stations = train.detailedRoute.split(',').map(s => s.trim());
-      
-      // Calculate a rough location based on travel time (Basic logic)
+      const travelDiff = totalMinutes - depMinutes;
+
       let estimatedIdx = 0;
-      const totalStations = stations.length;
-      if (currentHour >= 5 && currentHour < 10) estimatedIdx = Math.min(Math.floor(totalStations * 0.2), totalStations - 1);
-      else if (currentHour >= 10 && currentHour < 15) estimatedIdx = Math.min(Math.floor(totalStations * 0.5), totalStations - 1);
-      else if (currentHour >= 15 && currentHour < 20) estimatedIdx = Math.min(Math.floor(totalStations * 0.8), totalStations - 1);
-      else estimatedIdx = totalStations - 1;
+      if (travelDiff < 0) {
+        estimatedIdx = 0; // Not yet departed
+      } else {
+        // Assume roughly 30 mins between major station chunks
+        estimatedIdx = Math.min(Math.floor(travelDiff / 30), stations.length - 1);
+      }
 
       const loc = stations[estimatedIdx];
 
       setAiInference({ 
-        reason: `সিস্টেম নোট: লাইভ সার্ভারে সাময়িক সমস্যার কারণে শিডিউল অনুযায়ী সম্ভাব্য তথ্য দেওয়া হচ্ছে।\nবর্তমান সময় বিবেচনায় ট্রেনটি ${loc} স্টেশনের আশেপাশে থাকার সম্ভাবনা রয়েছে। এটি নিশ্চিত তথ্য নয়, এআই-এর একটি অনুমান।`, 
+        reason: `অফলাইন মোড নোট: লাইভ সার্ভারে কানেক্ট করা যায়নি।\nনির্ধারিত সময়সূচী অনুযায়ী ট্রেনটি এখন সম্ভবত ${loc} স্টেশনের আশেপাশে অবস্থান করছে। এটি একটি স্মার্ট ক্যালকুলেশন, নিশ্চিত তথ্য নয়।`, 
         delay: 'শিডিউল অনুযায়ী' 
       });
       setCurrentStation(loc);
@@ -218,7 +220,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
           </div>
           <div className="text-right flex flex-col items-end">
              <div className="bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 text-[9px] font-black px-3 py-1 rounded-full mb-1 border border-indigo-100/50 uppercase flex items-center gap-1 shadow-sm">
-               <Zap className="w-2.5 h-2.5 fill-indigo-600 animate-pulse" /> Live Tracker
+               <Zap className="w-2.5 h-2.5 fill-indigo-600 animate-pulse" /> Tracker
              </div>
              <p className="text-sm font-black text-slate-800 dark:text-white mt-1">{item.departure}</p>
           </div>
@@ -310,9 +312,9 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
           </h3>
           <div className="flex items-center gap-2">
             <p className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.4em]">
-              {isAiLoading ? 'Scanning Live Data...' : 
-               dataSource === 'live' ? 'Live Server Active' : 
-               dataSource === 'cache' ? 'Today\'s Data Cached' : 'Smart Engine Offline'}
+              {isAiLoading ? 'Scanning Socials...' : 
+               dataSource === 'live' ? 'Live Cloud Active' : 
+               dataSource === 'cache' ? 'Data Cached' : 'Smart Engine Offline'}
             </p>
             {(dataSource === 'live' || isAiLoading) && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>}
           </div>
@@ -340,13 +342,6 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
               <div className="w-full h-1 bg-indigo-200 dark:bg-indigo-900 rounded-full overflow-hidden">
                 <div className="w-full h-full bg-indigo-600 animate-[shimmer_1.5s_infinite]"></div>
               </div>
-              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">searching 2026 live web sources...</p>
-            </div>
-          )}
-          {dataSource === 'cache' && category === 'jobs' && (
-            <div className="mb-4 px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center gap-2 text-slate-500">
-              <History className="w-3.5 h-3.5" />
-              <span className="text-[9px] font-black uppercase tracking-widest">আজকের ডাটা মেমোরি থেকে দেখানো হচ্ছে</span>
             </div>
           )}
           {data.length > 0 ? data.map((item, i) => renderItem(item, i)) : <div className="text-center py-20 text-slate-400 font-bold">কোনো তথ্য পাওয়া যায়নি</div>}
@@ -364,8 +359,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
                     <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tighter">{selectedTrain.name}</h3>
                     <div className="flex items-center gap-2 mt-1.5">
                        <span className="text-[9px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm border border-white/20 bg-indigo-600 text-white">
-                         <Sparkles className="w-3 h-3 fill-white" />
-                         স্মার্ট লাইভ ট্র্যাকার
+                         <Sparkles className="w-3 h-3 fill-white" /> স্মার্ট লাইভ আপডেট
                        </span>
                     </div>
                  </div>
@@ -374,7 +368,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
                   <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity"><Globe className="w-20 h-20" /></div>
                   <div className="flex items-center gap-2 mb-5">
                     <Facebook className="w-4 h-4 text-blue-500" />
-                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">লাইভ সোশ্যাল নিউজ</span>
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">লাইভ নিউজ ফিড</span>
                   </div>
                   <div className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line italic">
                     {isInferring ? (
@@ -382,7 +376,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
                          <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden relative">
                             <div className="absolute inset-y-0 left-0 bg-indigo-500 w-1/3 animate-shimmer"></div>
                          </div>
-                         <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest animate-pulse">Scanning Social Feed (Target: {new Date().toLocaleTimeString('bn-BD')})...</p>
+                         <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest animate-pulse">স্ক্যানিং লাইভ ফিড...</p>
                        </div>
                     ) : aiInference.reason}
                   </div>
