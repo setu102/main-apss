@@ -9,6 +9,7 @@ import {
   Compass,
   MessageSquare,
   ShieldAlert,
+  Thermometer,
   Settings,
   Code2,
   Moon,
@@ -38,6 +39,8 @@ const App: React.FC = () => {
   const [titleClicks, setTitleClicks] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [imgError, setImgError] = useState(false);
+  const [temperature, setTemperature] = useState<number | null>(null);
+  const [weatherStatus, setWeatherStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') === 'dark' || 
@@ -49,6 +52,36 @@ const App: React.FC = () => {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchWeather = async () => {
+      setWeatherStatus('loading');
+      try {
+        const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=23.7571&longitude=89.6508&current_weather=true&timezone=Asia%2FDhaka');
+        if (!response.ok) throw new Error('WEATHER_FETCH_FAILED');
+        const data = await response.json();
+        const tempValue = data?.current_weather?.temperature;
+        if (typeof tempValue !== 'number') throw new Error('WEATHER_NO_DATA');
+        if (isMounted) {
+          setTemperature(tempValue);
+          setWeatherStatus('idle');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setWeatherStatus('error');
+        }
+      }
+    };
+
+    fetchWeather();
+    const intervalId = setInterval(fetchWeather, 10 * 60 * 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -155,6 +188,14 @@ const App: React.FC = () => {
           </div>
           
           <div className="bg-white/10 backdrop-blur-3xl rounded-[2.5rem] md:rounded-[3rem] p-6 md:p-7 mb-7 border border-white/20 shadow-2xl relative overflow-hidden group transition-all duration-500">
+            <div className="absolute top-5 right-5 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20 text-white flex items-center gap-2 shadow-lg">
+              <Thermometer className="w-4 h-4 text-amber-300" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-100">রাজবাড়ী</span>
+              <span className="text-sm font-black">
+                {weatherStatus === 'loading' ? '...' : weatherStatus === 'error' || temperature === null ? '--' : temperature.toLocaleString('bn-BD')}
+              </span>
+              <span className="text-[10px] font-bold text-indigo-200">°C</span>
+            </div>
             <div className="flex flex-col md:flex-row md:items-center justify-between relative z-10 gap-6">
               <div className="flex flex-col">
                 <div className="flex items-center gap-2 text-indigo-100 font-bold text-[10px] uppercase tracking-[0.25em] mb-4 bg-indigo-500/30 w-fit px-4 py-1.5 rounded-full border border-white/10">
