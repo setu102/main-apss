@@ -18,10 +18,9 @@ const NewsSlider: React.FC = () => {
   const fetchNews = async () => {
     setLoading(true);
     try {
-      // Prompt targeting 2026 and Facebook/Social media
       const response = await db.callAI({
-        contents: "বর্তমানে ২০২৬ সাল। রাজবাড়ী জেলার বিভিন্ন ফেসবুক গ্রুপ ও নিউজ পেজ থেকে আজকের সর্বশেষ ৫টি গুরুত্বপূর্ণ খবরের হেডলাইন বের করুন। ফিল্ড: title, source, time। পুরনো ২০২৪-এর কোনো তথ্য দেবেন না।",
-        systemInstruction: "আপনি একজন ২০২৬ সালের সোশ্যাল মিডিয়া রিপোর্টার। ফেসবুক পোস্ট ও গুগল সার্চ ব্যবহার করে রাজবাড়ীর লাইভ আপডেট দিন। কেবল JSON ফরম্যাটে উত্তর দিন।",
+        contents: "রাজবাড়ী জেলার বিভিন্ন ফেসবুক গ্রুপ ও নিউজ পেজ থেকে আজকের সর্বশেষ ৫টি গুরুত্বপূর্ণ খবরের হেডলাইন বের করুন। ফিল্ড: title, source, time।",
+        systemInstruction: "আপনি একজন সোশ্যাল মিডিয়া রিপোর্টার। কেবল JSON ফরম্যাটে উত্তর দিন।",
         useSearch: true
       });
       
@@ -33,7 +32,7 @@ const NewsSlider: React.FC = () => {
       }
     } catch (e) {
       setNews([
-        { title: "২০২৬ রাজবাড়ী স্মার্ট সিটি প্রজেক্টের লাইভ আপডেট", source: "Facebook Feed", time: "১০ মিনিট আগে" },
+        { title: "রাজবাড়ী স্মার্ট সিটি প্রজেক্টের লাইভ আপডেট", source: "Facebook Feed", time: "১০ মিনিট আগে" },
         { title: "পদ্মা সেতু দিয়ে রাজবাড়ী টু ঢাকা ট্রেন চলাচলের নতুন শিডিউল", source: "Rail Group", time: "১ ঘণ্টা আগে" },
         { title: "রাজবাড়ী রেলওয়ে স্টেশনে নতুন ডিজিটাল ডিসপ্লে স্থাপন", source: "District News", time: "২ ঘণ্টা আগে" }
       ]);
@@ -63,7 +62,7 @@ const NewsSlider: React.FC = () => {
       <div className="mx-6 mb-8 bg-white dark:bg-slate-900 rounded-[2rem] p-6 h-32 flex items-center justify-center border border-slate-100 dark:border-slate-800 shadow-sm">
         <div className="flex flex-col items-center gap-2">
           <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
-          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">২০২৬ সোশ্যাল মিডিয়া আপডেট লোড হচ্ছে...</span>
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">লাইভ নিউজ আপডেট লোড হচ্ছে...</span>
         </div>
       </div>
     );
@@ -78,10 +77,10 @@ const NewsSlider: React.FC = () => {
           <div className="bg-white/20 backdrop-blur-md p-2 rounded-lg text-white">
             <Facebook className="w-4 h-4" />
           </div>
-          <span className="text-[9px] font-black text-indigo-100 uppercase tracking-[0.3em]">Social Live 2026</span>
+          <span className="text-[9px] font-black text-indigo-100 uppercase tracking-[0.3em]">Social Feed 2026</span>
           <div className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-400/30">
             <Sparkles className="w-2.5 h-2.5" />
-            <span className="text-[8px] font-black uppercase tracking-widest">Gemini AI (Cloud Live)</span>
+            <span className="text-[8px] font-black uppercase tracking-widest">Smart Engine Live</span>
           </div>
         </div>
 
