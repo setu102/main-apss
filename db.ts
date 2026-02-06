@@ -28,7 +28,7 @@ export const db = {
     useSearch?: boolean;
   }) => {
     try {
-      const apiKey = process.env.API_KEY;
+      const apiKey = import.meta.env.VITE_API_KEY || process.env.API_KEY;
       if (!apiKey || apiKey === "undefined" || apiKey === "") {
         throw new Error("API_KEY_MISSING");
       }
