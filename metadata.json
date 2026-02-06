@@ -1,0 +1,7 @@
+{
+  "name": "রাজবাড়ী স্মার্ট পোর্টাল",
+  "description": "রাজবাড়ী জেলার লাইভ ট্রেন ট্র্যাকিং এবং বাজারদর সেবা।",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

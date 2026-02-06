@@ -1,0 +1,1 @@
+/* This file has been removed permanently. Optimized for Vercel. */
