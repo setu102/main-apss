@@ -99,11 +99,19 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     setCurrentStation(null);
     setAiInference({ delayMinutes: 0, confidence: 0, reason: 'Gemini AI (২০২৬ লাইভ ডাটা) ফেসবুক ও ওয়েব সার্চ করছে...', isAI: true });
     
-    const resolvedResponse = await db.callAI({
-      contents: `২০২৬ সাল। ট্রেনের নাম: ${train.name}। আজকের সর্বশেষ অবস্থান বাংলায় ব্যাখ্যা করুন।`,
-      systemInstruction: "আপনি একজন ২০২৬ সালের স্মার্ট রেলওয়ে অ্যাসিস্ট্যান্ট।",
-      useSearch: false
+    const serverResponse = await db.callServerAI({
+      contents: `২০২৬ সাল। ট্রেনের নাম: ${train.name}। ফেসবুকের "Rajbari Train Tracking Group" বা "বাংলাদেশ রেলওয়ে" গ্রুপ থেকে আজকের সর্বশেষ অবস্থান বের করুন। তথ্যটি স্পষ্টভাবে বাংলায় ব্যাখ্যা করুন।`,
+      systemInstruction: "আপনি একজন ২০২৬ সালের স্মার্ট রেলওয়ে অ্যাসিস্ট্যান্ট। ফেসবুক ও ওয়েবের লাইভ ডাটা ব্যবহার করে সঠিক অবস্থান বলুন।",
+      useSearch: true
     });
+
+    const resolvedResponse = serverResponse.mode === 'local_fallback' || !serverResponse.text
+      ? await db.callAI({
+          contents: `২০২৬ সাল। ট্রেনের নাম: ${train.name}। আজকের সর্বশেষ অবস্থান বাংলায় ব্যাখ্যা করুন।`,
+          systemInstruction: "আপনি একজন ২০২৬ সালের স্মার্ট রেলওয়ে অ্যাসিস্ট্যান্ট।",
+          useSearch: false
+        })
+      : serverResponse;
 
     if (resolvedResponse.mode === 'local_fallback' || !resolvedResponse.text) {
       setInferenceMode('puter');

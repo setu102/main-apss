@@ -19,7 +19,54 @@ export const db = {
     if (error === "API_KEY_MISSING") return "API key সেট করা নেই।";
     if (error === "TIMEOUT") return "সার্চ রিকোয়েস্ট টাইমআউট হয়েছে।";
     if (error === "EMPTY_RESPONSE") return "এআই থেকে খালি রেসপন্স এসেছে।";
+    if (error === "AI_GATEWAY_ERROR") return "সার্ভারলেস এআই গেটওয়ে ত্রুটি হয়েছে।";
     return "সার্ভার ত্রুটি বা কোটা সীমা থাকতে পারে।";
+  },
+  callServerAI: async (params: {
+    contents: any;
+    systemInstruction?: string;
+    useSearch?: boolean;
+  }) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: params.contents,
+          systemInstruction: params.systemInstruction,
+          tools: params.useSearch ? [{ googleSearch: {} }] : undefined,
+          model: 'gemini-3-flash-preview'
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload.error || 'AI_GATEWAY_ERROR');
+      }
+
+      const data = await response.json();
+      if (!data?.text) {
+        throw new Error("EMPTY_RESPONSE");
+      }
+
+      return {
+        text: data.text,
+        mode: 'serverless_live',
+        groundingMetadata: data.groundingMetadata
+      };
+    } catch (error: any) {
+      return {
+        text: null,
+        mode: 'local_fallback',
+        error: error.name === 'AbortError' ? 'TIMEOUT' : error.message
+      };
+    }
   },
 
   callAI: async (params: { 
