@@ -37,7 +37,7 @@ export const db = {
         body: JSON.stringify({
           contents: params.contents,
           systemInstruction: params.systemInstruction,
-          tools: params.useSearch ? [{ googleSearch: {} }] : undefined,
+          tools: params.useSearch ? [{ googleSearch: {} }] : [],
           model: 'gemini-3-flash-preview'
         }),
         signal: controller.signal

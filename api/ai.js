@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       contents: contents,
       config: {
         systemInstruction: systemInstruction || "আপনি রাজবাড়ী জেলার একজন ডিজিটাল রেলওয়ে অ্যাসিস্ট্যান্ট। আপনার কাজ হলো গুগল সার্চ ব্যবহার করে ট্রেনের বর্তমান অবস্থান খুঁজে বের করা। যদি সঠিক অবস্থান না পাওয়া যায়, তবে শিডিউল অনুযায়ী সম্ভাব্য অবস্থান বলুন।",
-        tools: tools || [{ googleSearch: {} }],
+        tools: tools?.length ? tools : undefined,
         temperature: 0.1, // তথ্যের নির্ভুলতা বাড়াতে টেম্পারেচার কমানো হয়েছে
       },
     });
