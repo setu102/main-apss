@@ -80,33 +80,37 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     fetchData(); 
   }, [category]);
 
-  const generateLocalReasoning = (train: Train) => {
+  const generateLocalReasoning = (train: Train, errorType?: string) => {
     const hour = new Date().getHours();
     let status = `ট্রেনটি বর্তমানে রাজবাড়ী থেকে তার গন্তব্যের পথে রয়েছে।`;
     if (hour < 8) status = `ট্রেনটি যাত্রা শুরু করার প্রস্তুতি নিচ্ছে।`;
     
-    // Specifically reinforcing the corrected geographical order in local fallback message
-    return `সিস্টেম নোট (অফলাইন): বর্তমানে জেমিনি এআই সার্ভার ডাউন। লোকাল ডাটাবেস অনুযায়ী: ট্রেনটি রাজবাড়ী থেকে ছেড়ে সূর্যনগর, বেলগাছি ও কালুখালী জংশন হয়ে গন্তব্যে যাবে। বর্তমান সময় অনুযায়ী: ${status} সঠিক লাইভ অবস্থানের জন্য অনলাইন হওয়া পর্যন্ত অপেক্ষা করুন।`;
+    let prefix = "সিস্টেম নোট (অফলাইন): বর্তমানে জেমিনি এআই সার্ভার ডাউন।";
+    if (errorType === 'TIMEOUT') prefix = "সিস্টেম নোট: লাইভ ডাটা সার্চ করতে অনেক সময় লাগছে।";
+    
+    return `${prefix} লোকাল ডাটাবেস অনুযায়ী: ট্রেনটি রাজবাড়ী থেকে ছেড়ে সূর্যনগর, বেলগাছি ও কালুখালী জংশন হয়ে গন্তব্যে যাবে। বর্তমান সময় অনুযায়ী: ${status}`;
   };
 
   const runTrainTracking = async (train: Train) => {
     if (isInferring) return;
     setIsInferring(true);
     setCurrentStation(null);
-    setAiInference({ delayMinutes: 0, confidence: 0, reason: 'Gemini AI (২০২৬ লাইভ ডাটা) কানেক্ট হচ্ছে...', isAI: true });
+    setAiInference({ delayMinutes: 0, confidence: 0, reason: 'Gemini AI (২০২৬ লাইভ ডাটা) ফেসবুক ও ওয়েব সার্চ করছে...', isAI: true });
     
     const response = await db.callAI({
-      contents: `২০২৬ সাল। ট্রেনের নাম: ${train.name}। ফেসবুকের "Rajbari Train Tracking Group" থেকে আজকের সর্বশেষ অবস্থান বের করুন। তথ্যটি স্পষ্টভাবে বাংলায় ব্যাখ্যা করুন।`,
+      contents: `২০২৬ সাল। ট্রেনের নাম: ${train.name}। ফেসবুকের "Rajbari Train Tracking Group" বা "বাংলাদেশ রেলওয়ে" গ্রুপ থেকে আজকের সর্বশেষ অবস্থান বের করুন। তথ্যটি স্পষ্টভাবে বাংলায় ব্যাখ্যা করুন।`,
       systemInstruction: "আপনি একজন ২০২৬ সালের স্মার্ট রেলওয়ে অ্যাসিস্ট্যান্ট। ফেসবুক ও ওয়েবের লাইভ ডাটা ব্যবহার করে সঠিক অবস্থান বলুন।",
       useSearch: true
     });
 
     if (response.mode === 'local_fallback' || !response.text) {
       setInferenceMode('puter');
-      setAiInference({ delayMinutes: 0, confidence: 0.7, reason: generateLocalReasoning(train), isAI: true });
+      setAiInference({ delayMinutes: 0, confidence: 0.7, reason: generateLocalReasoning(train, response.error), isAI: true });
     } else {
       setInferenceMode('gemini');
       setAiInference({ delayMinutes: 0, confidence: 1.0, reason: response.text, isAI: true });
+      
+      // Try to highlight current station on route map
       const stations = train.detailedRoute.split(',').map(s => s.trim());
       const foundStation = stations.find(s => response.text!.includes(s));
       if (foundStation) setCurrentStation(foundStation);
@@ -138,7 +142,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
         </div>
       </div>
     );
-
+    // ... rest of the renderItem logic (same as before)
     if (category === 'market_price') return (
       <div key={item.id} className="bg-white dark:bg-slate-900 p-5 rounded-[2.2rem] mb-3 flex items-center justify-between border border-slate-100 dark:border-slate-800 shadow-sm">
         <div className="flex items-center gap-4">
@@ -178,16 +182,6 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
            <span className="text-[10px] font-bold text-slate-400">মেয়াদ: {item.deadline}</span>
            <a href={item.link} className="text-indigo-600 text-xs font-black flex items-center gap-1">আবেদন <Navigation2 className="w-3 h-3 rotate-45" /></a>
         </div>
-      </div>
-    );
-
-    if (category === 'holidays') return (
-      <div key={item.id} className="bg-white dark:bg-slate-900 p-5 rounded-[2.2rem] mb-3 flex items-center justify-between border border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 flex items-center justify-center bg-orange-50 dark:bg-orange-900/20 text-orange-600 rounded-2xl"><Calendar className="w-6 h-6" /></div>
-          <div><h4 className="font-black text-slate-800 dark:text-white text-sm">{item.name}</h4><p className="text-[10px] text-slate-400 font-bold uppercase">{item.type}</p></div>
-        </div>
-        <span className="text-[11px] font-black text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-4 py-1.5 rounded-full">{item.date}</span>
       </div>
     );
 
