@@ -105,13 +105,21 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
       useSearch: true
     });
 
-    const resolvedResponse = serverResponse.mode === 'local_fallback' || !serverResponse.text
-      ? await db.callAI({
+    const serverFallback = serverResponse.mode === 'local_fallback' || !serverResponse.text
+      ? await db.callServerAI({
           contents: `২০২৬ সাল। ট্রেনের নাম: ${train.name}। আজকের সর্বশেষ অবস্থান বাংলায় ব্যাখ্যা করুন।`,
           systemInstruction: "আপনি একজন ২০২৬ সালের স্মার্ট রেলওয়ে অ্যাসিস্ট্যান্ট।",
           useSearch: false
         })
       : serverResponse;
+
+    const resolvedResponse = serverFallback.mode === 'local_fallback' || !serverFallback.text
+      ? await db.callAI({
+          contents: `২০২৬ সাল। ট্রেনের নাম: ${train.name}। আজকের সর্বশেষ অবস্থান বাংলায় ব্যাখ্যা করুন।`,
+          systemInstruction: "আপনি একজন ২০২৬ সালের স্মার্ট রেলওয়ে অ্যাসিস্ট্যান্ট।",
+          useSearch: false
+        })
+      : serverFallback;
 
     if (resolvedResponse.mode === 'local_fallback' || !resolvedResponse.text) {
       setInferenceMode('puter');
