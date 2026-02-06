@@ -86,7 +86,9 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     if (hour < 8) status = `ট্রেনটি যাত্রা শুরু করার প্রস্তুতি নিচ্ছে।`;
     
     let prefix = "সিস্টেম নোট (অফলাইন): বর্তমানে জেমিনি এআই সার্ভার ডাউন।";
-    if (errorType === 'TIMEOUT') prefix = "সিস্টেম নোট: লাইভ ডাটা সার্চ করতে অনেক সময় লাগছে।";
+    if (errorType) {
+      prefix = `সিস্টেম নোট: ${db.getAIErrorMessage(errorType)}`;
+    }
     
     return `${prefix} লোকাল ডাটাবেস অনুযায়ী: ট্রেনটি রাজবাড়ী থেকে ছেড়ে সূর্যনগর, বেলগাছি ও কালুখালী জংশন হয়ে গন্তব্যে যাবে। বর্তমান সময় অনুযায়ী: ${status}`;
   };
@@ -103,16 +105,25 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
       useSearch: true
     });
 
-    if (response.mode === 'local_fallback' || !response.text) {
+    const resolvedResponse = response.mode === 'local_fallback' || !response.text
+      ? await db.callAI({
+          contents: `২০২৬ সাল। ট্রেনের নাম: ${train.name}। আজকের সর্বশেষ অবস্থান বাংলায় ব্যাখ্যা করুন।`,
+          systemInstruction: "আপনি একজন ২০২৬ সালের স্মার্ট রেলওয়ে অ্যাসিস্ট্যান্ট।",
+          useSearch: false
+        })
+      : response;
+
+    if (resolvedResponse.mode === 'local_fallback' || !resolvedResponse.text) {
       setInferenceMode('puter');
-      setAiInference({ delayMinutes: 0, confidence: 0.7, reason: generateLocalReasoning(train, response.error), isAI: true });
+      const errorMessage = response.error || resolvedResponse.error;
+      setAiInference({ delayMinutes: 0, confidence: 0.7, reason: generateLocalReasoning(train, errorMessage), isAI: true });
     } else {
       setInferenceMode('gemini');
-      setAiInference({ delayMinutes: 0, confidence: 1.0, reason: response.text, isAI: true });
+      setAiInference({ delayMinutes: 0, confidence: 1.0, reason: resolvedResponse.text, isAI: true });
       
       // Try to highlight current station on route map
       const stations = train.detailedRoute.split(',').map(s => s.trim());
-      const foundStation = stations.find(s => response.text!.includes(s));
+      const foundStation = stations.find(s => resolvedResponse.text!.includes(s));
       if (foundStation) setCurrentStation(foundStation);
     }
     setIsInferring(false);

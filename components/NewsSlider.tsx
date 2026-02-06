@@ -14,9 +14,11 @@ const NewsSlider: React.FC = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
   const fetchNews = async () => {
     setLoading(true);
+    setErrorNotice(null);
     try {
       // Prompt targeting 2026 and Facebook/Social media
       const response = await db.callAI({
@@ -24,7 +26,12 @@ const NewsSlider: React.FC = () => {
         systemInstruction: "আপনি একজন ২০২৬ সালের সোশ্যাল মিডিয়া রিপোর্টার। ফেসবুক পোস্ট ও গুগল সার্চ ব্যবহার করে রাজবাড়ীর লাইভ আপডেট দিন। কেবল JSON ফরম্যাটে উত্তর দিন।",
         useSearch: true
       });
-      
+
+      if (response.mode === 'local_fallback' || !response.text) {
+        setErrorNotice(`সিস্টেম নোট: ${db.getAIErrorMessage(response.error)}`);
+        throw new Error("AI_FALLBACK");
+      }
+
       const parsed = db.extractJSON(response.text);
       if (parsed && Array.isArray(parsed)) {
         setNews(parsed);
@@ -32,6 +39,9 @@ const NewsSlider: React.FC = () => {
         throw new Error("Invalid format");
       }
     } catch (e) {
+      if (!errorNotice) {
+        setErrorNotice("সিস্টেম নোট: লাইভ সোশ্যাল ডাটা পাওয়া যায়নি। লোকাল আপডেট দেখানো হচ্ছে।");
+      }
       setNews([
         { title: "২০২৬ রাজবাড়ী স্মার্ট সিটি প্রজেক্টের লাইভ আপডেট", source: "Facebook Feed", time: "১০ মিনিট আগে" },
         { title: "পদ্মা সেতু দিয়ে রাজবাড়ী টু ঢাকা ট্রেন চলাচলের নতুন শিডিউল", source: "Rail Group", time: "১ ঘণ্টা আগে" },
@@ -86,6 +96,11 @@ const NewsSlider: React.FC = () => {
         </div>
 
         <div className="min-h-[90px] flex flex-col justify-center">
+          {errorNotice && (
+            <p className="text-[11px] font-semibold text-amber-200 bg-amber-500/10 border border-amber-400/30 rounded-xl px-3 py-2 mb-3">
+              {errorNotice}
+            </p>
+          )}
           <h3 className="text-lg md:text-xl font-black text-white leading-tight mb-4 animate-slide-up transition-all duration-500">
             {news[currentIndex]?.title}
           </h3>

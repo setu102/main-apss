@@ -14,6 +14,13 @@ export const db = {
       return null; 
     }
   },
+  getAIErrorMessage: (error?: string) => {
+    if (!error) return "কারণ শনাক্ত করা যায়নি।";
+    if (error === "API_KEY_MISSING") return "API key সেট করা নেই।";
+    if (error === "TIMEOUT") return "সার্চ রিকোয়েস্ট টাইমআউট হয়েছে।";
+    if (error === "EMPTY_RESPONSE") return "এআই থেকে খালি রেসপন্স এসেছে।";
+    return "সার্ভার ত্রুটি বা কোটা সীমা থাকতে পারে।";
+  },
 
   callAI: async (params: { 
     contents: any; 

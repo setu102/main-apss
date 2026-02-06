@@ -68,7 +68,8 @@ const AIChat: React.FC = () => {
     } catch (error: any) {
       console.error("Chat Error:", error);
       // Fallback Logic
-      let fallbackText = "দুঃখিত, বর্তমানে এআই সার্ভারের সাথে সংযোগ বিচ্ছিন্ন। পুটার লোকাল ইঞ্জিন কাজ করছে।";
+      const errorNotice = db.getAIErrorMessage(error.message);
+      let fallbackText = `দুঃখিত, বর্তমানে এআই সার্ভারের সাথে সংযোগ বিচ্ছিন্ন। (${errorNotice}) পুটার লোকাল ইঞ্জিন কাজ করছে।`;
       
       setMessages(prev => [...prev, { 
         role: 'model', 
