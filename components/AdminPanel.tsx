@@ -13,7 +13,8 @@ import {
   Globe,
   Sparkles,
   Server,
-  AlertTriangle
+  AlertTriangle,
+  Key
 } from 'lucide-react';
 import { db } from '../db';
 
@@ -30,28 +31,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     setTestResult('');
     try {
       const response = await db.callAI({
-        contents: "Hello, system check. Are you online?",
-        systemInstruction: "You are a diagnostic tool. Reply with exactly: 'SYSTEM_ONLINE'"
+        contents: "System ping check.",
+        systemInstruction: "You are a diagnostic tool. Reply with: 'SERVER_ACTIVE'"
       });
       
-      if (response.mode === 'local_fallback' || !response.text) {
-        throw new Error("Local fallback triggered. Check API key.");
+      if (response.mode === 'offline_fallback' || !response.text) {
+        throw new Error(response.error || "লাইভ সার্ভার রেসপন্স করছে না।");
       }
       
       setTestStatus('success');
-      setTestResult(`জেমিনি এআই সফলভাবে সংযুক্ত হয়েছে! রেসপন্স মোড: ${response.mode}`);
+      setTestResult(`অভিনন্দন! আপনার লাইভ সার্ভিস ইঞ্জিন (Live Engine) এখন পুরোপুরি সক্রিয়। রেসপন্স মোড: ${response.mode}. এখন আপনার অ্যাপটি ২০২৬ সালের রিয়েল-টাইম তথ্য ও লাইভ ট্রেন ট্র্যাকিং সাপোর্ট করবে।`);
     } catch (e: any) {
       console.error("Diagnostic Error:", e);
       setTestStatus('error');
-      setTestResult(e.message === 'API_KEY_MISSING' 
-        ? "API Key পাওয়া যায়নি। অনুগ্রহ করে এনভায়রনমেন্ট ভেরিয়েবল (API_KEY) চেক করুন।" 
-        : `সংযোগে ত্রুটি: ${e.message || "Unknown error"}. এটি নেটওয়ার্ক বা কোটা সমস্যা হতে পারে।`);
+      setTestResult(`সংযোগে ত্রুটি: ${e.message}. \n\nটিপস: আপনি কি Vercel ড্যাশবোর্ডে API_KEY এনভায়রনমেন্ট ভেরিয়েবলটি সেট করেছেন? সেট করার পর নতুন করে রি-ডিপ্লয় (Redeploy) করতে ভুলবেন না।`);
     }
   };
 
   return (
     <div className="p-6 animate-slide-up pb-32 max-w-lg mx-auto">
-      <div className="mb-8 p-8 bg-gradient-to-br from-slate-900 to-indigo-900 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden">
+      <div className="mb-8 p-8 bg-gradient-to-br from-slate-900 to-indigo-900 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden border border-white/10">
         <div className="absolute top-0 right-0 p-10 opacity-10">
           <Activity className="w-24 h-24 animate-pulse" />
         </div>
@@ -65,16 +64,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
               <p className="text-indigo-200 text-[10px] font-bold opacity-80 uppercase tracking-[0.3em]">Smart Engine Dashboard</p>
             </div>
           </div>
-          <button onClick={onLogout} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl border border-white/20 transition-all text-white"><LogOut className="w-5 h-5" /></button>
+          <button onClick={onLogout} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl border border-white/20 transition-all text-white active:scale-90"><LogOut className="w-5 h-5" /></button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-slate-100 dark:border-slate-800 premium-shadow mb-8">
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-slate-100 dark:border-slate-800 premium-shadow mb-8 shadow-sm">
         <div className="flex items-center gap-4 mb-6">
           <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg"><Server className="w-6 h-6" /></div>
           <div>
             <h4 className="text-xl font-black dark:text-white tracking-tighter uppercase">সার্ভার স্ট্যাটাস</h4>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Gemini API Diagnostic</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Cloud API Diagnostic</p>
           </div>
         </div>
 
@@ -84,7 +83,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
           className="w-full flex items-center justify-center gap-3 py-5 bg-indigo-600 text-white rounded-[1.8rem] font-black shadow-xl hover:bg-indigo-700 active:scale-95 transition-all mb-6 disabled:opacity-50"
         >
           {testStatus === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-          {testStatus === 'loading' ? 'কানেকশন টেস্ট হচ্ছে...' : 'জেমিনি কানেকশন টেস্ট করুন'}
+          {testStatus === 'loading' ? 'কানেকশন টেস্ট হচ্ছে...' : 'সার্ভার কানেকশন টেস্ট করুন'}
         </button>
 
         {testStatus !== 'idle' && (
@@ -94,20 +93,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
           }`}>
             {testStatus === 'success' ? <CheckCircle2 className="w-6 h-6 shrink-0 mt-1" /> : <AlertTriangle className="w-6 h-6 shrink-0 mt-1" />}
             <div>
-              <p className="font-black text-sm uppercase tracking-widest mb-1">{testStatus === 'success' ? 'জেমিনি অনলাইন' : 'জেমিনি অফলাইন'}</p>
-              <p className="text-xs font-medium leading-relaxed opacity-90">{testResult}</p>
+              <p className="font-black text-sm uppercase tracking-widest mb-1">{testStatus === 'success' ? 'সার্ভার অনলাইন' : 'সার্ভার অফলাইন'}</p>
+              <p className="text-xs font-medium leading-relaxed opacity-90 whitespace-pre-line">{testResult}</p>
             </div>
           </div>
         )}
       </div>
 
-      <div className="bg-amber-50 dark:bg-amber-950/20 p-6 rounded-[2.5rem] border border-amber-100 dark:border-amber-900/50 flex items-start gap-4">
-          <Globe className="w-8 h-8 text-amber-500 shrink-0" />
-          <div className="space-y-2">
-            <p className="text-[10px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">গুরুত্বপূর্ণ টিপস</p>
-            <p className="text-xs font-bold text-amber-700 dark:text-amber-500 leading-relaxed">
-              যদি আপনার API Key সেট করা থাকে কিন্তু তবুও "অফলাইন" দেখায়, তবে নিশ্চিত হোন যে আপনার এপিআই কী-তে পর্যাপ্ত কোটা আছে এবং এটি `gemini-3-flash-preview` মডেল সাপোর্ট করে।
-            </p>
+      <div className="bg-amber-50 dark:bg-amber-950/20 p-8 rounded-[3rem] border border-amber-100 dark:border-amber-900/50 flex flex-col gap-4">
+          <div className="flex items-center gap-3 text-amber-600">
+            <Key className="w-6 h-6" />
+            <p className="text-[11px] font-black uppercase tracking-widest">Vercel হোস্টিং টিপস</p>
+          </div>
+          <div className="text-xs font-bold text-amber-700 dark:text-amber-500 leading-relaxed space-y-2">
+            <p>১. Vercel ড্যাশবোর্ডে আপনার প্রোজেক্টে যান।</p>
+            <p>২. <strong className="text-slate-900 dark:text-white">Settings > Environment Variables</strong> সেকশনে যান।</p>
+            <p>৩. <strong className="text-slate-900 dark:text-white">API_KEY</strong> নামে একটি কী তৈরি করে আপনার জেমিনি কী-টি পেস্ট করুন।</p>
+            <p>৪. <strong className="text-slate-900 dark:text-white">Deployments</strong> ট্যাব থেকে লেটেস্ট বিল্ডটি <strong className="text-slate-900 dark:text-white">Redeploy</strong> করুন।</p>
           </div>
       </div>
     </div>
