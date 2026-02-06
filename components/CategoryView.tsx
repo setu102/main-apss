@@ -80,41 +80,96 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     fetchData(); 
   }, [category]);
 
+  // Normalize Bangla characters for robust matching
+  const normalize = (text: string) => {
+    return text
+      .replace(/[ড়র]/g, 'র')
+      .replace(/[ঢ়হ]/g, 'হ')
+      .replace(/ো/g, 'া') // handle some common variations
+      .replace(/\s+/g, '')
+      .trim();
+  };
+
+  const findStationInText = (text: string, route: string) => {
+    const stations = route.split(',').map(s => s.trim());
+    const normalizedText = normalize(text);
+    
+    // Check for exact matches first
+    for (const station of stations) {
+      if (normalizedText.includes(normalize(station))) {
+        return station;
+      }
+    }
+    
+    // Check for common station aliases/parts
+    const aliases: Record<string, string[]> = {
+      "ঢাকা (কমলাপুর)": ["ঢাকা", "কমলাপুর", "Dhaka", "Komlapur"],
+      "রাজবাড়ী": ["রাজবাড়ি", "রাজবাড়ী", "Rajbari"],
+      "পাংশা": ["পাংশা", "Pangsha"],
+      "পোড়াদহ জংশন": ["পোড়াদহ", "পোরাদহ", "Poradoho"],
+      "কালুখালী জংশন": ["কালুখালী", "Kalukhali"],
+      "কুষ্টিয়া কোর্ট": ["কুষ্টিয়া", "কুষ্টিয়া", "Kushtia"]
+    };
+
+    for (const [realName, aliasList] of Object.entries(aliases)) {
+      if (stations.includes(realName)) {
+        for (const alias of aliasList) {
+          if (normalizedText.includes(normalize(alias))) {
+            return realName;
+          }
+        }
+      }
+    }
+    
+    return null;
+  };
+
   const generateLocalReasoning = (train: Train, errorType?: string) => {
     const hour = new Date().getHours();
     let status = `ট্রেনটি বর্তমানে রাজবাড়ী থেকে তার গন্তব্যের পথে রয়েছে।`;
     if (hour < 8) status = `ট্রেনটি যাত্রা শুরু করার প্রস্তুতি নিচ্ছে।`;
     
-    let prefix = "সিস্টেম নোট: এআই সার্ভার রেসপন্স করছে না।";
-    if (errorType === 'TIMEOUT') prefix = "সিস্টেম নোট: লাইভ ডাটা লোড হতে দেরি হচ্ছে (নেটওয়ার্ক স্লো)।";
+    let prefix = "সিস্টেম নোট: জেমিনি এআই কোটা শেষ বা সার্ভার অফলাইন। পুটার ইঞ্জিন ব্যবহার করা হচ্ছে।";
+    if (errorType === 'TIMEOUT') prefix = "সিস্টেম নোট: লাইভ ডাটা লোড হতে অনেক দেরি হচ্ছে। পুটার ইঞ্জিন ব্যাকআপ দিচ্ছে।";
     
-    return `${prefix} লোকাল ডাটাবেস অনুযায়ী: ${train.name} রাজবাড়ী থেকে ছেড়ে কালুখালী জংশন হয়ে গন্তব্যে যাবে। সর্বশেষ শিডিউল চেক করুন।`;
+    return `${prefix}\n\nলোকাল ডাটাবেস অনুযায়ী: ${train.name} বর্তমানে ${train.route} রুটে নিয়মিত চলাচল করছে। সর্বশেষ অবস্থান জানতে রাজবাড়ী রেলওয়ে স্টেশনে যোগাযোগ করুন।`;
   };
 
   const runTrainTracking = async (train: Train) => {
     if (isInferring) return;
     setIsInferring(true);
     setCurrentStation(null);
-    setAiInference({ delayMinutes: 0, confidence: 0, reason: 'Gemini AI লাইভ ডাটা স্ক্যান করছে... অনুগ্রহ করে অপেক্ষা করুন।', isAI: true });
+    setAiInference({ delayMinutes: 0, confidence: 0, reason: 'Gemini AI লাইভ ডাটা ও ফেসবুক গ্রুপ স্ক্যান করছে...', isAI: true });
     
-    const response = await db.callAI({
-      contents: `২০২৬ সাল। ${train.name} ট্রেনের বর্তমান লোকেশন কী? ফেসবুকের "Rajbari Train Tracking Group" থেকে আজকের সর্বশেষ আপডেট দিন।`,
-      systemInstruction: "আপনি একজন দক্ষ রেলওয়ে অ্যাসিস্ট্যান্ট। সংক্ষেপে এবং নির্ভুলভাবে ট্রেনের বর্তমান অবস্থান বলুন।",
-      useSearch: true
-    });
+    try {
+      const response = await db.callAI({
+        contents: `২০২৬ সাল। ${train.name} ট্রেনটির আজকের অবস্থান কী? নিচের স্টেশনগুলোর মধ্যে এটি এখন কোথায় থাকতে পারে? রুট: ${train.detailedRoute}। ফেসবুক গ্রুপ "Rajbari Train Tracking Group" থেকে সঠিক তথ্য দিন।`,
+        systemInstruction: `আপনি একজন ২০২৬ সালের স্মার্ট রেলওয়ে অ্যাসিস্ট্যান্ট। ফেসবুকের লেটেস্ট পোস্ট থেকে তথ্য নিয়ে সংক্ষেপে উত্তর দিন। যদি সঠিক অবস্থান না পান, তবে "তথ্য পাওয়া যায়নি" বলুন। আপনার স্রষ্টা SOVRAB ROY।`,
+        useSearch: true
+      });
 
-    if (response.mode === 'local_fallback' || !response.text) {
-      setInferenceMode('puter');
-      setAiInference({ delayMinutes: 0, confidence: 0.5, reason: generateLocalReasoning(train, response.error), isAI: true });
-    } else {
+      if (response.mode === 'local_fallback' || !response.text) {
+        throw new Error(response.error || "Gemini Failed");
+      }
+
       setInferenceMode('gemini');
       setAiInference({ delayMinutes: 0, confidence: 1.0, reason: response.text, isAI: true });
       
-      const stations = train.detailedRoute.split(',').map(s => s.trim());
-      const foundStation = stations.find(s => response.text!.includes(s));
-      if (foundStation) setCurrentStation(foundStation);
+      const found = findStationInText(response.text, train.detailedRoute);
+      if (found) setCurrentStation(found);
+
+    } catch (error: any) {
+      console.warn("Switching to Puter Engine due to:", error.message);
+      setInferenceMode('puter');
+      setAiInference({ 
+        delayMinutes: 0, 
+        confidence: 0.5, 
+        reason: generateLocalReasoning(train, error.message), 
+        isAI: true 
+      });
+    } finally {
+      setIsInferring(false);
     }
-    setIsInferring(false);
   };
 
   const formatText = (text: string) => {
@@ -141,7 +196,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
         </div>
       </div>
     );
-    // ... rest of the render logic remains the same
+
     if (category === 'market_price') return (
         <div key={item.id} className="bg-white dark:bg-slate-900 p-5 rounded-[2.2rem] mb-3 flex items-center justify-between border border-slate-100 dark:border-slate-800 shadow-sm">
           <div className="flex items-center gap-4">
@@ -155,9 +210,9 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
             {item.trend === 'up' ? <TrendingUp className="w-4 h-4 text-rose-500" /> : item.trend === 'down' ? <TrendingDown className="w-4 h-4 text-emerald-500" /> : <Clock className="w-4 h-4 text-slate-300" />}
           </div>
         </div>
-      );
-  
-      if (category === 'notices') return (
+    );
+
+    if (category === 'notices') return (
         <div key={item.id} className={`p-6 rounded-[2.5rem] mb-4 border shadow-sm ${item.priority === 'high' ? 'bg-rose-50 border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/50' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
           <div className="flex items-center gap-3 mb-3">
             <Megaphone className={`w-5 h-5 ${item.priority === 'high' ? 'text-rose-600' : 'text-orange-500'}`} />
@@ -166,9 +221,9 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
           <h4 className="font-black text-slate-800 dark:text-white text-md mb-2">{item.title}</h4>
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{item.summary}</p>
         </div>
-      );
-  
-      if (category === 'jobs') return (
+    );
+
+    if (category === 'jobs') return (
         <div key={item.id} className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] mb-4 border border-slate-100 dark:border-slate-800 shadow-sm">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-4 bg-purple-50 dark:bg-purple-900/20 text-purple-600 rounded-2xl"><Briefcase className="w-6 h-6" /></div>
@@ -182,18 +237,18 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
              <a href={item.link} className="text-indigo-600 text-xs font-black flex items-center gap-1">আবেদন <Navigation2 className="w-3 h-3 rotate-45" /></a>
           </div>
         </div>
-      );
-  
-      const getIcon = () => {
+    );
+
+    const getIcon = () => {
         if (category === 'doctors') return <UserRoundSearch className="w-6 h-6 text-blue-500" />;
         if (category === 'hospitals') return <Building2 className="w-6 h-6 text-emerald-500" />;
         if (category === 'govt_services') return <Landmark className="w-6 h-6 text-cyan-600" />;
         if (category === 'education') return <School className="w-6 h-6 text-sky-500" />;
         if (category === 'personalities') return <Crown className="w-6 h-6 text-amber-500" />;
         return <Info className="w-6 h-6 text-indigo-500" />;
-      };
-  
-      return (
+    };
+
+    return (
         <div key={item.id} className="bg-white dark:bg-slate-900 p-5 rounded-[2.2rem] mb-3 flex items-center justify-between border border-slate-50 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 flex items-center justify-center bg-slate-50 dark:bg-slate-800 rounded-2xl shadow-inner">
@@ -206,7 +261,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
           </div>
           {(item.mobile || item.number) && <a href={`tel:${item.mobile || item.number}`} className="p-4 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 rounded-2xl active:scale-90 transition-all"><Phone className="w-5 h-5" /></a>}
         </div>
-      );
+    );
   };
 
   return (
@@ -251,7 +306,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
                     <div className="flex items-center gap-2 mt-1">
                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${inferenceMode === 'gemini' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'} flex items-center gap-1 shadow-sm`}>
                          {inferenceMode === 'gemini' ? <Sparkles className="w-2.5 h-2.5" /> : <Cpu className="w-2.5 h-2.5" />}
-                         {inferenceMode === 'gemini' ? 'Gemini AI (Cloud Live)' : 'Puter Engine (Simulated)'}
+                         {inferenceMode === 'gemini' ? 'Gemini AI (Live Grounding)' : 'Puter Engine (Back-up)'}
                        </span>
                     </div>
                  </div>
@@ -275,7 +330,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
                  <div className="relative pl-8 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1.5px] before:bg-slate-200 dark:before:bg-slate-700">
                     {selectedTrain.detailedRoute.split(',').map((st, idx) => {
                       const stationName = st.trim();
-                      const isCurrent = currentStation && stationName.includes(currentStation);
+                      const isCurrent = currentStation && (stationName === currentStation || normalize(stationName).includes(normalize(currentStation)));
                       return (
                         <div key={idx} className="relative flex items-center gap-4">
                           <div className={`absolute -left-[22px] w-3.5 h-3.5 rounded-full border-2 bg-white dark:bg-slate-900 transition-all duration-700 ${isCurrent ? 'border-indigo-600 bg-indigo-600 scale-150 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'border-slate-300 dark:border-slate-600'}`}></div>
