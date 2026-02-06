@@ -31,7 +31,8 @@ import {
   Crown,
   Link as LinkIcon,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  History
 } from 'lucide-react';
 import { Category, Train, AIInference } from '../types.ts';
 import { db } from '../db.ts';
@@ -58,7 +59,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [dataSource, setDataSource] = useState<'gemini' | 'puter'>('puter');
+  const [dataSource, setDataSource] = useState<'live' | 'puter' | 'cache'>('puter');
   const [selectedTrain, setSelectedTrain] = useState<Train | null>(null);
   const [isInferring, setIsInferring] = useState(false);
   const [currentStation, setCurrentStation] = useState<string | null>(null);
@@ -73,19 +74,29 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     return `আজ ${now.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}, এখন সময় ${now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
   };
 
-  const fetchData = async () => {
+  const fetchData = async (forceRefresh = false) => {
     setLoading(true);
     setIsAiLoading(false);
-    setDataSource('puter');
     
     try {
-      // 1. Load Local Data First
       const localItems = await db.getCategory(category);
       setData(localItems);
+      setDataSource('puter');
       
-      // 2. Priority Categories
       if (['market_price', 'notices', 'jobs'].includes(category)) {
-        fetchAiCategoryData(category, localItems);
+        if (category === 'jobs' && !forceRefresh) {
+          const cachedData = localStorage.getItem('rajbari_jobs_cache');
+          const cacheTime = localStorage.getItem('rajbari_jobs_timestamp');
+          const today = new Date().toDateString();
+
+          if (cachedData && cacheTime === today) {
+            setData(JSON.parse(cachedData));
+            setDataSource('cache');
+            setLoading(false);
+            return;
+          }
+        }
+        await fetchAiCategoryData(category, localItems);
       }
     } catch (e: any) {
       console.error(e);
@@ -98,20 +109,19 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     setIsAiLoading(true);
     const timeContext = getLiveTimeContext();
     let prompt = "";
-    let systemInstruction = "আপনি একজন ডাটা এনালিস্ট। কেবল JSON রিটার্ন করুন। অপ্রয়োজনীয় টেক্সট দেবেন না।";
 
     if (cat === 'market_price') {
-      prompt = `${timeContext}। রাজবাড়ীর বড় বাজার ও মুরগির ফার্ম বাজারের আজকের লাইভ বাজারদর দিন। ফরম্যাট: [{name, unit, priceRange, trend: 'up'|'down'|'stable'}].`;
+      prompt = `${timeContext}। রাজবাড়ীর বড় বাজার ও মুরগির ফার্ম বাজারের আজকের লাইভ বাজারদর দিন।`;
     } else if (cat === 'notices') {
-      prompt = `${timeContext}। রাজবাড়ী জেলা প্রশাসনের সর্বশেষ জরুরি নোটিশগুলো দিন। প্রতিটি নোটিশের জন্য সংক্ষিপ্ত সারাংশ (Summary) অবশ্যই থাকতে হবে। ফরম্যাট: [{title, date, summary, priority: 'high'|'normal'}].`;
+      prompt = `${timeContext}। রাজবাড়ী জেলা প্রশাসনের সর্বশেষ জরুরি নোটিশগুলো দিন।`;
     } else if (cat === 'jobs') {
-      prompt = `${timeContext}। রাজবাড়ী জেলার আজকের লেটেস্ট চাকরির বিজ্ঞপ্তি দিন। ফরম্যাট: [{title, org, deadline, link, type: 'Govt'|'Private'}].`;
+      prompt = `${timeContext}। রাজবাড়ী জেলার আজকের লেটেস্ট চাকরির বিজ্ঞপ্তি দিন।`;
     }
 
     try {
       const response = await db.callAI({
         contents: prompt,
-        systemInstruction: systemInstruction,
+        category: cat,
         useSearch: true
       });
 
@@ -120,10 +130,13 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
       const aiParsed = db.extractJSON(response.text);
       if (aiParsed && Array.isArray(aiParsed)) {
         setData(aiParsed);
-        setDataSource('gemini');
+        setDataSource('live');
+        if (cat === 'jobs') {
+          localStorage.setItem('rajbari_jobs_cache', JSON.stringify(aiParsed));
+          localStorage.setItem('rajbari_jobs_timestamp', new Date().toDateString());
+        }
       }
     } catch (e) {
-      console.warn(`Gemini API failed for ${cat}. Falling back to Puter.`);
       setData(fallbackData);
       setDataSource('puter');
     } finally {
@@ -154,33 +167,35 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
     setCurrentStation(null);
     setSources([]);
     const timeContext = getLiveTimeContext();
-    setAiInference({ reason: 'গুগল সার্চ ও সোশ্যাল নেটওয়ার্ক স্ক্যান করা হচ্ছে...', delay: 'হিসাব হচ্ছে...' });
+    setAiInference({ reason: 'স্মার্ট ইঞ্জিনের মাধ্যমে রিয়েল-টাইম তথ্য খোঁজা হচ্ছে...', delay: 'হিসাব হচ্ছে...' });
     
     try {
       const prompt = `${timeContext}। ${train.name} ট্রেনটির (রুট: ${train.route}) বর্তমান অবস্থান কোথায় এবং কত মিনিট দেরি আছে? ফেসবুক ও রাজবাড়ী রেলওয়ে নিউজ পোর্টাল চেক করুন। রুট ম্যাপ: ${train.detailedRoute}`;
-      
-      const response = await db.callAI({
-        contents: prompt,
-        useSearch: true
-      });
-
-      if (response.mode === 'local_fallback' || !response.text) throw new Error("GEMINI_FAIL");
-
+      const response = await db.callAI({ contents: prompt, useSearch: true });
+      if (response.mode === 'local_fallback' || !response.text) throw new Error("FAIL");
       setAiInference({ reason: response.text, delay: 'লাইভ ডাটা অনুযায়ী' });
       setSources(response.sources || []);
       const found = findStationInText(response.text, train.detailedRoute);
       if (found) setCurrentStation(found);
-
     } catch (error) {
+      // Improved Fallback Inference based on schedule time vs current time
       const now = new Date();
-      const hour = now.getHours();
+      const currentHour = now.getHours();
+      const currentMin = now.getMinutes();
       const stations = train.detailedRoute.split(',').map(s => s.trim());
-      let loc = stations[0];
-      if (hour > 10 && hour < 18) loc = stations[Math.floor(stations.length / 2)];
-      else if (hour >= 18) loc = stations[stations.length - 1];
+      
+      // Calculate a rough location based on travel time (Basic logic)
+      let estimatedIdx = 0;
+      const totalStations = stations.length;
+      if (currentHour >= 5 && currentHour < 10) estimatedIdx = Math.min(Math.floor(totalStations * 0.2), totalStations - 1);
+      else if (currentHour >= 10 && currentHour < 15) estimatedIdx = Math.min(Math.floor(totalStations * 0.5), totalStations - 1);
+      else if (currentHour >= 15 && currentHour < 20) estimatedIdx = Math.min(Math.floor(totalStations * 0.8), totalStations - 1);
+      else estimatedIdx = totalStations - 1;
+
+      const loc = stations[estimatedIdx];
 
       setAiInference({ 
-        reason: `জেমিনি ওভারলোড থাকায় পুটার ইঞ্জিন সময় অনুযায়ী সম্ভাব্য ডাটা দিচ্ছে।\nবর্তমানে ট্রেনটি ${loc} স্টেশনের আশেপাশে থাকার সম্ভাবনা ৯৫%।`, 
+        reason: `সিস্টেম নোট: লাইভ সার্ভারে সাময়িক সমস্যার কারণে শিডিউল অনুযায়ী সম্ভাব্য তথ্য দেওয়া হচ্ছে।\nবর্তমান সময় বিবেচনায় ট্রেনটি ${loc} স্টেশনের আশেপাশে থাকার সম্ভাবনা রয়েছে। এটি নিশ্চিত তথ্য নয়, এআই-এর একটি অনুমান।`, 
         delay: 'শিডিউল অনুযায়ী' 
       });
       setCurrentStation(loc);
@@ -203,7 +218,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
           </div>
           <div className="text-right flex flex-col items-end">
              <div className="bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 text-[9px] font-black px-3 py-1 rounded-full mb-1 border border-indigo-100/50 uppercase flex items-center gap-1 shadow-sm">
-               <Zap className="w-2.5 h-2.5 fill-indigo-600 animate-pulse" /> Live Radar
+               <Zap className="w-2.5 h-2.5 fill-indigo-600 animate-pulse" /> Live Tracker
              </div>
              <p className="text-sm font-black text-slate-800 dark:text-white mt-1">{item.departure}</p>
           </div>
@@ -295,12 +310,14 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
           </h3>
           <div className="flex items-center gap-2">
             <p className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.4em]">
-              {isAiLoading ? 'AI Scanning...' : (dataSource === 'gemini' ? 'Gemini AI Live' : 'Puter Engine V2')}
+              {isAiLoading ? 'Scanning Live Data...' : 
+               dataSource === 'live' ? 'Live Server Active' : 
+               dataSource === 'cache' ? 'Today\'s Data Cached' : 'Smart Engine Offline'}
             </p>
-            {dataSource === 'gemini' && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>}
+            {(dataSource === 'live' || isAiLoading) && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>}
           </div>
         </div>
-        <button onClick={fetchData} className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 text-indigo-600 active:rotate-180 transition-all">
+        <button onClick={() => fetchData(true)} className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 text-indigo-600 active:rotate-180 transition-all">
            <RefreshCcw className={`w-5 h-5 ${loading || isAiLoading ? 'animate-spin' : ''}`} />
         </button>
       </div>
@@ -308,7 +325,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-32 gap-6">
           <Loader2 className="w-16 h-16 animate-spin text-indigo-600 opacity-20" />
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">পাওয়ারিং আপ ইঞ্জিন...</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">পাওয়ারিং আপ স্মার্ট ইঞ্জিন...</p>
         </div>
       ) : (
         <div className="animate-slide-up space-y-1">
@@ -316,14 +333,20 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
             <div className="bg-indigo-50 dark:bg-indigo-950/40 p-5 rounded-[2rem] border border-indigo-100/50 dark:border-indigo-900/50 mb-6 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                  <Sparkles className="w-3 h-3 animate-bounce" /> Gemini AI Deep Scan Active
+                  <Sparkles className="w-3 h-3 animate-bounce" /> Smart Scan in Progress
                 </span>
                 <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
               </div>
               <div className="w-full h-1 bg-indigo-200 dark:bg-indigo-900 rounded-full overflow-hidden">
                 <div className="w-full h-full bg-indigo-600 animate-[shimmer_1.5s_infinite]"></div>
               </div>
-              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">searching real-time web sources (2026)...</p>
+              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">searching 2026 live web sources...</p>
+            </div>
+          )}
+          {dataSource === 'cache' && category === 'jobs' && (
+            <div className="mb-4 px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center gap-2 text-slate-500">
+              <History className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-black uppercase tracking-widest">আজকের ডাটা মেমোরি থেকে দেখানো হচ্ছে</span>
             </div>
           )}
           {data.length > 0 ? data.map((item, i) => renderItem(item, i)) : <div className="text-center py-20 text-slate-400 font-bold">কোনো তথ্য পাওয়া যায়নি</div>}
@@ -342,7 +365,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
                     <div className="flex items-center gap-2 mt-1.5">
                        <span className="text-[9px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm border border-white/20 bg-indigo-600 text-white">
                          <Sparkles className="w-3 h-3 fill-white" />
-                         Gemini Live Tracker
+                         স্মার্ট লাইভ ট্র্যাকার
                        </span>
                     </div>
                  </div>
@@ -351,7 +374,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
                   <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity"><Globe className="w-20 h-20" /></div>
                   <div className="flex items-center gap-2 mb-5">
                     <Facebook className="w-4 h-4 text-blue-500" />
-                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">লাইভ সোশ্যাল আপডেট</span>
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">লাইভ সোশ্যাল নিউজ</span>
                   </div>
                   <div className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line italic">
                     {isInferring ? (
@@ -405,7 +428,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ category }) => {
                  className="w-full py-6 bg-indigo-600 rounded-[2.2rem] flex items-center justify-center gap-4 text-white font-black shadow-[0_15px_40px_rgba(79,70,229,0.3)] active:scale-95 transition-all disabled:opacity-50 group"
                >
                  {isInferring ? <Loader2 className="w-6 h-6 animate-spin" /> : <RefreshCcw className="w-6 h-6 group-hover:rotate-180 transition-transform duration-700" />}
-                 {isInferring ? 'রিয়েল-টাইম স্ক্যানিং...' : 'লাইভ লোকেশন আপডেট করুন'}
+                 {isInferring ? 'রিয়েল-টাইম তথ্য খোঁজা হচ্ছে...' : 'লাইভ লোকেশন আপডেট করুন'}
                </button>
             </div>
           </div>
