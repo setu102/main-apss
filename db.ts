@@ -57,8 +57,8 @@ export const db = {
         ৩. ভাষা: শুদ্ধ বাংলা।
       `;
 
-      // Use Pro model for Search tasks as it handles grounding much better
-      const modelName = params.useSearch ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+      // Use Flash model for broader availability across deployments
+      const modelName = params.useSearch ? 'gemini-3-flash-preview' : 'gemini-3-flash-preview';
 
       const responsePromise = ai.models.generateContent({
         model: modelName,
